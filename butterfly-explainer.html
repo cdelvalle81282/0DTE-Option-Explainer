@@ -1,0 +1,522 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>How a 0DTE Butterfly Works</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,650;9..144,750&family=Public+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --paper:#F3F5F4;
+    --card:#FFFFFF;
+    --ink:#16232B;
+    --muted:#64737D;
+    --line:#DDE3E1;
+    --green:#0A8754;
+    --green-soft:#E2F3EB;
+    --red:#CE4237;
+    --red-soft:#FBE9E6;
+    --gold:#E8A33D;
+    --gold-soft:#FBF1DE;
+    --radius:18px;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%}
+  body{
+    font-family:'Public Sans',system-ui,sans-serif;
+    background:var(--paper);
+    color:var(--ink);
+    display:flex;flex-direction:column;
+    min-height:100vh;
+  }
+  .frame{
+    width:100%;max-width:880px;margin:0 auto;
+    flex:1;display:flex;flex-direction:column;
+    padding:20px 20px 12px;
+  }
+  .topbar{
+    display:flex;align-items:baseline;justify-content:space-between;
+    padding:0 4px 14px;
+  }
+  .brand{
+    font-family:'Fraunces',serif;font-weight:650;font-size:17px;letter-spacing:.01em;
+  }
+  .brand span{color:var(--green)}
+  .counter{font-size:13px;color:var(--muted);font-variant-numeric:tabular-nums}
+
+  .stage{
+    background:var(--card);
+    border:1px solid var(--line);
+    border-radius:var(--radius);
+    box-shadow:0 12px 32px -18px rgba(22,35,43,.22);
+    flex:1;display:flex;flex-direction:column;
+    overflow:hidden;position:relative;
+  }
+  .slide{display:none;flex:1;flex-direction:column;padding:34px 40px 28px;animation:fadeUp .35s ease}
+  .slide.active{display:flex}
+  @keyframes fadeUp{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+  @media (prefers-reduced-motion: reduce){.slide{animation:none}}
+
+  .eyebrow{
+    font-size:12px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;
+    color:var(--green);margin-bottom:10px;
+  }
+  h1{font-family:'Fraunces',serif;font-weight:750;font-size:clamp(28px,4.6vw,44px);line-height:1.08;margin-bottom:14px;letter-spacing:-.01em}
+  h2{font-family:'Fraunces',serif;font-weight:650;font-size:clamp(22px,3.4vw,32px);line-height:1.12;margin-bottom:12px;letter-spacing:-.01em}
+  p.lead{font-size:17px;line-height:1.55;color:var(--ink);max-width:60ch}
+  p.sub{font-size:15px;line-height:1.6;color:var(--muted);max-width:62ch;margin-top:10px}
+  .hl{background:var(--gold-soft);border-radius:4px;padding:0 4px}
+  .good{color:var(--green);font-weight:700}
+  .bad{color:var(--red);font-weight:700}
+
+  /* nav */
+  .nav{
+    display:flex;align-items:center;justify-content:space-between;
+    padding:14px 4px 4px;gap:14px;
+  }
+  .dots{display:flex;gap:7px}
+  .dot{width:8px;height:8px;border-radius:50%;background:var(--line);border:none;cursor:pointer;padding:0;transition:all .2s}
+  .dot.on{background:var(--ink);width:22px;border-radius:5px}
+  .navbtn{
+    font-family:inherit;font-size:15px;font-weight:600;
+    border:1.5px solid var(--ink);background:var(--card);color:var(--ink);
+    border-radius:999px;padding:9px 22px;cursor:pointer;transition:all .15s;
+  }
+  .navbtn.primary{background:var(--ink);color:#fff}
+  .navbtn:hover{transform:translateY(-1px)}
+  .navbtn:disabled{opacity:.3;cursor:default;transform:none}
+  .navbtn:focus-visible,.dot:focus-visible{outline:2px solid var(--green);outline-offset:2px}
+
+  /* generic cards */
+  .cards{display:grid;gap:14px;margin-top:22px}
+  .cards.three{grid-template-columns:repeat(3,1fr)}
+  .cardlet{border:1px solid var(--line);border-radius:14px;padding:16px 16px 14px;background:#FBFCFC}
+  .cardlet .who{font-weight:700;font-size:15px;margin-bottom:2px}
+  .cardlet .what{font-size:13px;color:var(--muted);line-height:1.45;min-height:38px}
+  .price{font-family:'Fraunces',serif;font-weight:750;font-size:30px;margin-top:10px;font-variant-numeric:tabular-nums}
+  .bar{height:10px;border-radius:6px;background:var(--line);margin-top:10px;overflow:hidden}
+  .bar i{display:block;height:100%;border-radius:6px;background:var(--ink);transition:width .8s ease}
+  .tag{display:inline-block;font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;border-radius:999px;padding:3px 10px;margin-top:10px}
+  .tag.g{background:var(--green-soft);color:var(--green)}
+  .tag.r{background:var(--red-soft);color:var(--red)}
+  .tag.n{background:#EEF1F0;color:var(--muted)}
+
+  /* slide 1 */
+  .hero-fly{font-size:60px;line-height:1;margin-bottom:18px}
+  .agenda{display:grid;grid-template-columns:1fr 1fr;gap:10px 26px;margin-top:26px;max-width:560px}
+  .agenda div{display:flex;gap:10px;align-items:baseline;font-size:15px;color:var(--ink)}
+  .agenda b{color:var(--green);font-family:'Fraunces',serif;font-weight:750}
+
+  /* slide 4 build */
+  .buildwrap{display:grid;grid-template-columns:1.15fr .85fr;gap:26px;margin-top:20px;align-items:start}
+  .legbtn{
+    width:100%;text-align:left;font-family:inherit;cursor:pointer;
+    border:1.5px solid var(--line);background:#FBFCFC;border-radius:14px;
+    padding:14px 16px;margin-bottom:10px;transition:all .18s;font-size:15px;
+  }
+  .legbtn .t{font-weight:700}
+  .legbtn .d{font-size:13px;color:var(--muted);margin-top:2px}
+  .legbtn .m{float:right;font-weight:700;font-variant-numeric:tabular-nums}
+  .legbtn.done{border-color:var(--green);background:var(--green-soft)}
+  .legbtn.done .m{color:var(--green)}
+  .legbtn:focus-visible{outline:2px solid var(--green);outline-offset:2px}
+  .costbox{border:1.5px solid var(--line);border-radius:14px;padding:18px;text-align:center;background:#FBFCFC}
+  .costbox .lbl{font-size:12px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--muted)}
+  .costbox .val{font-family:'Fraunces',serif;font-weight:750;font-size:44px;margin:6px 0 2px;font-variant-numeric:tabular-nums;transition:color .3s}
+  .costbox .note{font-size:13px;color:var(--muted);line-height:1.5;min-height:58px}
+  .flysvg{display:block;margin:6px auto 0;max-width:100%}
+
+  /* slide 5 tent */
+  .tentwrap{margin-top:14px}
+  .readout{display:flex;gap:12px;margin-bottom:12px;flex-wrap:wrap}
+  .chip{border:1.5px solid var(--line);border-radius:12px;padding:9px 16px;background:#FBFCFC;min-width:150px}
+  .chip .k{font-size:11px;font-weight:700;letter-spacing:.09em;text-transform:uppercase;color:var(--muted)}
+  .chip .v{font-family:'Fraunces',serif;font-weight:750;font-size:24px;font-variant-numeric:tabular-nums;transition:color .2s}
+  input[type=range]{width:100%;accent-color:var(--ink);margin-top:10px;cursor:grab}
+  .verdict{margin-top:8px;font-size:15px;font-weight:600;min-height:24px}
+
+  /* slide 6 theta */
+  .nights{display:flex;align-items:center;gap:14px;margin:20px 0 6px}
+  .nights .lbl{font-size:14px;font-weight:600;color:var(--muted)}
+  .stepbtn{border:1.5px solid var(--ink);background:var(--card);border-radius:999px;width:34px;height:34px;font-size:18px;font-weight:700;cursor:pointer;color:var(--ink)}
+  .stepbtn:disabled{opacity:.3;cursor:default}
+  .nightn{font-family:'Fraunces',serif;font-weight:750;font-size:26px;min-width:36px;text-align:center;font-variant-numeric:tabular-nums}
+  .theta-val{font-family:'Fraunces',serif;font-weight:750;font-size:26px;margin-top:8px;font-variant-numeric:tabular-nums}
+
+  /* slide 7 settlement */
+  .vs{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:22px}
+  .vs .cardlet ul{list-style:none;margin-top:10px}
+  .vs .cardlet li{font-size:14px;line-height:1.5;padding:6px 0 6px 26px;position:relative}
+  .vs .cardlet li::before{position:absolute;left:0;font-weight:700}
+  .vs .stock li::before{content:"✕";color:var(--red)}
+  .vs .index li::before{content:"✓";color:var(--green)}
+
+  /* slide 8 exit */
+  .steps{margin-top:20px;display:grid;gap:12px;max-width:640px}
+  .step{display:flex;gap:14px;align-items:flex-start}
+  .stepnum{flex:0 0 34px;height:34px;border-radius:50%;background:var(--ink);color:#fff;display:flex;align-items:center;justify-content:center;font-family:'Fraunces',serif;font-weight:750;font-size:16px}
+  .step .txt{font-size:15px;line-height:1.55}
+  .callout{margin-top:22px;border-left:4px solid var(--green);background:var(--green-soft);border-radius:0 12px 12px 0;padding:14px 18px;font-size:15px;line-height:1.55;max-width:640px}
+
+  footer{font-size:11.5px;color:var(--muted);text-align:center;padding:10px 20px 16px;line-height:1.5}
+
+  @media (max-width:720px){
+    .slide{padding:24px 20px 20px}
+    .cards.three{grid-template-columns:1fr}
+    .buildwrap{grid-template-columns:1fr}
+    .vs{grid-template-columns:1fr}
+    .agenda{grid-template-columns:1fr}
+    .cardlet .what{min-height:0}
+  }
+</style>
+</head>
+<body>
+<div class="frame">
+  <div class="topbar">
+    <div class="brand">The 0DTE <span>Butterfly</span>, Explained</div>
+    <div class="counter" id="counter">1 / 8</div>
+  </div>
+
+  <div class="stage" id="stage">
+
+    <!-- SLIDE 1 -->
+    <section class="slide active" data-slide>
+      <div class="hero-fly">🦋</div>
+      <div class="eyebrow">A 5-minute walkthrough</div>
+      <h1>How a same-day options trade can cost less <em>and</em> put time on your side</h1>
+      <p class="lead">"0DTE" just means <span class="hl">zero days to expiration</span> — an option you buy today that expires today, at the 4:00 p.m. ET close. We trade them on the S&amp;P 500 index (SPX) using a strategy called the <strong>butterfly</strong>.</p>
+      <div class="agenda">
+        <div><b>1</b> Why buying an option outright is expensive</div>
+        <div><b>2</b> How a butterfly slashes the cost</div>
+        <div><b>3</b> Where the trade makes money (the cash zone)</div>
+        <div><b>4</b> How time works <em>for</em> you, not against you</div>
+        <div><b>5</b> Why SPX pays you in cash, not shares</div>
+        <div><b>6</b> The simple exit plan</div>
+      </div>
+    </section>
+
+    <!-- SLIDE 2 -->
+    <section class="slide" data-slide>
+      <div class="eyebrow">The problem</div>
+      <h2>Buying a single option is a pricey bet with a leaky bucket</h2>
+      <p class="lead">Say a stock trades at $95 and you think it's headed lower this week. The straightforward move is to buy a <strong>put</strong> — an option that gains value as the stock falls.</p>
+      <div class="cards three">
+        <div class="cardlet">
+          <div class="who">The cost</div>
+          <div class="what">One put contract at $6.30 costs&hellip;</div>
+          <div class="price">$630</div>
+          <span class="tag r">A hefty ticket</span>
+        </div>
+        <div class="cardlet">
+          <div class="who">The clock</div>
+          <div class="what">Every day the stock doesn't move, the option leaks value:</div>
+          <div class="price bad">&minus;$17<span style="font-size:16px;color:var(--muted);font-family:'Public Sans'">/day</span></div>
+          <span class="tag r">Time is your enemy</span>
+        </div>
+        <div class="cardlet">
+          <div class="who">The pressure</div>
+          <div class="what">You need the stock to move down — and <em>fast</em> — just to break even.</div>
+          <div class="price">⏳</div>
+          <span class="tag n">Right idea can still lose</span>
+        </div>
+      </div>
+      <p class="sub">You can be completely right about the direction and still lose money, simply because the move came a day too late. There's a better way to place the same bet.</p>
+    </section>
+
+    <!-- SLIDE 3 -->
+    <section class="slide" data-slide>
+      <div class="eyebrow">Three traders, same opinion</div>
+      <h2>Same bet, three price tags</h2>
+      <p class="lead">Drew, Sarah, and Mark all think the $95 stock is going down. Watch what happens to the cost as each one gets a little more specific about <em>where</em> it lands.</p>
+      <div class="cards three">
+        <div class="cardlet">
+          <div class="who">Drew buys a put</div>
+          <div class="what">"It's going below $95." That's it.</div>
+          <div class="price">$630</div>
+          <div class="bar"><i style="width:0%" data-w="100%"></i></div>
+          <span class="tag r">Full price</span>
+        </div>
+        <div class="cardlet">
+          <div class="who">Sarah buys a put spread</div>
+          <div class="what">"Below $95 — but probably not below $85." She sells the $85 put to offset her cost.</div>
+          <div class="price">$330</div>
+          <div class="bar"><i style="width:0%" data-w="52%"></i></div>
+          <span class="tag n">About half</span>
+        </div>
+        <div class="cardlet">
+          <div class="who">Mark buys a butterfly</div>
+          <div class="what">"It'll land <em>near $85</em>." His precision earns the biggest discount.</div>
+          <div class="price good">$150</div>
+          <div class="bar"><i style="width:0%" data-w="24%"></i></div>
+          <span class="tag g">Roughly a quarter of the cost</span>
+        </div>
+      </div>
+      <p class="sub">The more specific your target, the less the market charges you to make the bet. Next: how Mark actually builds that $150 trade.</p>
+    </section>
+
+    <!-- SLIDE 4 -->
+    <section class="slide" data-slide>
+      <div class="eyebrow">Interactive · Tap each piece</div>
+      <h2>Build the butterfly: two wings and a body</h2>
+      <p class="lead" style="font-size:15.5px">A butterfly is three orders placed together as one trade. Here's a real-style SPX example. Tap the legs in order and watch the cost.</p>
+      <div class="buildwrap">
+        <div>
+          <button class="legbtn" id="leg1" onclick="addLeg(1)">
+            <span class="m">pay $105</span>
+            <span class="t">🪽 Buy 1 put at $4,130</span>
+            <div class="d">The lower wing — you pay for this one.</div>
+          </button>
+          <button class="legbtn" id="leg2" onclick="addLeg(2)">
+            <span class="m">collect $490</span>
+            <span class="t">🐛 Sell 2 puts at $4,140</span>
+            <div class="d">The body — selling these puts money <em>back</em> in your pocket.</div>
+          </button>
+          <button class="legbtn" id="leg3" onclick="addLeg(3)">
+            <span class="m">pay $507</span>
+            <span class="t">🪽 Buy 1 put at $4,150</span>
+            <div class="d">The upper wing — the other one you pay for.</div>
+          </button>
+        </div>
+        <div class="costbox">
+          <div class="lbl">Your total cost</div>
+          <div class="val" id="costval">$0</div>
+          <div class="note" id="costnote">Add all three legs to see what this trade really costs.</div>
+          <svg class="flysvg" id="flysvg" width="200" height="90" viewBox="0 0 200 90" aria-hidden="true">
+            <path id="wingL" d="M92 55 C 55 10, 15 15, 22 45 C 26 66, 65 70, 92 58 Z" fill="#0A8754" opacity="0"/>
+            <path id="wingR" d="M108 55 C 145 10, 185 15, 178 45 C 174 66, 135 70, 108 58 Z" fill="#0A8754" opacity="0"/>
+            <ellipse id="bodyE" cx="100" cy="55" rx="7" ry="22" fill="#16232B" opacity="0"/>
+            <path d="M96 36 C 90 26, 84 24, 80 20 M104 36 C 110 26, 116 24, 120 20" stroke="#16232B" stroke-width="2.5" fill="none" opacity="0" id="antennae"/>
+          </svg>
+        </div>
+      </div>
+      <p class="sub" style="margin-top:14px">⚠️ Always enter all three legs as a <strong>single order</strong> so they fill together — never one piece at a time.</p>
+    </section>
+
+    <!-- SLIDE 5 -->
+    <section class="slide" data-slide>
+      <div class="eyebrow">Interactive · Drag the slider</div>
+      <h2>The cash zone: where the trade pays off</h2>
+      <p class="lead" style="font-size:15.5px">Our butterfly cost <strong>$122</strong>. At today's 4:00 p.m. close, where the S&amp;P settles decides what it's worth. Drag the closing price and watch.</p>
+      <div class="tentwrap">
+        <div class="readout">
+          <div class="chip"><div class="k">S&amp;P closes at</div><div class="v" id="settleval">4,140</div></div>
+          <div class="chip"><div class="k">Your profit / loss</div><div class="v" id="plval">+$878</div></div>
+        </div>
+        <svg id="tent" width="100%" height="200" viewBox="0 0 720 200" preserveAspectRatio="none" role="img" aria-label="Profit tent chart">
+          <!-- zero line -->
+          <line x1="40" y1="150" x2="700" y2="150" stroke="#DDE3E1" stroke-width="2"/>
+          <!-- cash zone shading -->
+          <rect x="205" y="20" width="330" height="160" fill="#E2F3EB" opacity=".55"/>
+          <!-- payoff tent: x maps 4115..4165 to 40..700 ; peak at 4140 (x=370) -->
+          <polygon points="40,166 205,166 370,34 535,166 700,166 700,150 40,150" fill="#CE4237" opacity=".10"/>
+          <polyline points="40,166 205,166 370,34 535,166 700,166" fill="none" stroke="#16232B" stroke-width="3" stroke-linejoin="round"/>
+          <!-- strike labels -->
+          <text x="205" y="196" text-anchor="middle" font-size="13" fill="#64737D" font-family="Public Sans">4,130</text>
+          <text x="370" y="196" text-anchor="middle" font-size="13" font-weight="700" fill="#0A8754" font-family="Public Sans">4,140 · sweet spot</text>
+          <text x="535" y="196" text-anchor="middle" font-size="13" fill="#64737D" font-family="Public Sans">4,150</text>
+          <!-- marker -->
+          <line id="markerline" x1="370" y1="20" x2="370" y2="180" stroke="#E8A33D" stroke-width="2.5" stroke-dasharray="4 4"/>
+          <circle id="markerdot" cx="370" cy="34" r="8" fill="#E8A33D" stroke="#fff" stroke-width="2.5"/>
+        </svg>
+        <input type="range" id="settle" min="4115" max="4165" step="1" value="4140" aria-label="Where the S&P 500 settles">
+        <div class="verdict" id="verdict"></div>
+      </div>
+    </section>
+
+    <!-- SLIDE 6 -->
+    <section class="slide" data-slide>
+      <div class="eyebrow">Interactive · Advance the nights</div>
+      <h2>The butterfly's superpower: time works for you</h2>
+      <p class="lead" style="font-size:15.5px">Remember our three traders? Step through the nights and watch what each trade does while everyone sleeps.</p>
+      <div class="nights">
+        <span class="lbl">Nights passed:</span>
+        <button class="stepbtn" id="nightminus" onclick="stepNight(-1)" aria-label="Back one night">−</button>
+        <span class="nightn" id="nightn">0</span>
+        <button class="stepbtn" id="nightplus" onclick="stepNight(1)" aria-label="Forward one night">+</button>
+      </div>
+      <div class="cards three">
+        <div class="cardlet">
+          <div class="who">Drew's put</div>
+          <div class="what">Loses about $17 every night.</div>
+          <div class="theta-val bad" id="drewv">$0</div>
+          <span class="tag r">Time is the enemy</span>
+        </div>
+        <div class="cardlet">
+          <div class="who">Sarah's spread</div>
+          <div class="what">Loses about $3.50 every night. Better, but still leaking.</div>
+          <div class="theta-val bad" id="sarahv">$0</div>
+          <span class="tag n">Slower leak</span>
+        </div>
+        <div class="cardlet">
+          <div class="who">Mark's butterfly</div>
+          <div class="what">Actually <em>collects</em> about $1.60 a night early on.</div>
+          <div class="theta-val good" id="markv">$0</div>
+          <span class="tag g">Time is the ally</span>
+        </div>
+      </div>
+      <p class="sub">Mark gets paid to wait for his idea to play out — what he calls a <span class="hl">free look</span> at the trade. That edge doesn't last forever, but it's yours at the start, when you need it most.</p>
+    </section>
+
+    <!-- SLIDE 7 -->
+    <section class="slide" data-slide>
+      <div class="eyebrow">Why SPX</div>
+      <h2>No shares change hands — just cash</h2>
+      <p class="lead">Stock options and index options end their lives very differently. This is the single biggest reason we run these trades on SPX.</p>
+      <div class="vs">
+        <div class="cardlet stock">
+          <div class="who">🍎 Stock options (e.g. Apple)</div>
+          <ul>
+            <li>Expire into <strong>actual shares</strong> of stock</li>
+            <li>Forget to close before the bell? You could wake up owning (or owing) shares</li>
+            <li>You must babysit the position into the close</li>
+          </ul>
+        </div>
+        <div class="cardlet index">
+          <div class="who">📈 SPX index options</div>
+          <ul>
+            <li><strong>Cash settled</strong> — no shares, ever</li>
+            <li>Hold to the close and any value is simply <strong>deposited as cash</strong> the next morning</li>
+            <li>No surprise assignments, no early exercise</li>
+          </ul>
+        </div>
+      </div>
+      <p class="sub">If your SPX butterfly finishes in the money, the position just disappears and the money shows up in your account. One more perk worth a Google: <span class="hl">tax rule 1256</span> may treat index-option gains favorably — ask a tax professional, not us.</p>
+    </section>
+
+    <!-- SLIDE 8 -->
+    <section class="slide" data-slide>
+      <div class="eyebrow">The exit plan</div>
+      <h2>Sell half at a double. Let the rest ride.</h2>
+      <div class="steps">
+        <div class="step"><div class="stepnum">1</div><div class="txt"><strong>Buy 4 butterflies</strong> instead of 1 (so: buy 4 lower-wing puts, sell 8 body puts, buy 4 upper-wing puts).</div></div>
+        <div class="step"><div class="stepnum">2</div><div class="txt"><strong>Set a limit order to sell half at double</strong> what you paid. Paid $1.22? The order to sell 2 butterflies goes in at $2.44. If it hits, that's a 100% gain — and your original money is off the table.</div></div>
+        <div class="step"><div class="stepnum">3</div><div class="txt"><strong>Let the other half ride to the 4:00 p.m. close.</strong> You're now playing with house money. Anything it settles for is deposited as cash the next morning.</div></div>
+      </div>
+      <div class="callout">
+        <strong>The bottom line:</strong> your maximum loss is always just what you paid to open the trade — often around $150 or less. Your upside if the index lands in the cash zone can be several times that. Low cost, defined risk, time on your side, and cash settlement. That's the 0DTE butterfly. 🦋
+      </div>
+    </section>
+
+  </div>
+
+  <div class="nav">
+    <button class="navbtn" id="prev" onclick="go(-1)">← Back</button>
+    <div class="dots" id="dots" role="tablist" aria-label="Slides"></div>
+    <button class="navbtn primary" id="next" onclick="go(1)">Next →</button>
+  </div>
+</div>
+<footer>For education only — not a trade recommendation. Options involve risk and aren't suitable for everyone. Examples use illustrative prices.</footer>
+
+<script>
+  const slides = Array.from(document.querySelectorAll('[data-slide]'));
+  let cur = 0;
+  const dotsBox = document.getElementById('dots');
+  slides.forEach((_, i) => {
+    const d = document.createElement('button');
+    d.className = 'dot' + (i === 0 ? ' on' : '');
+    d.setAttribute('aria-label', 'Go to slide ' + (i + 1));
+    d.onclick = () => show(i);
+    dotsBox.appendChild(d);
+  });
+
+  function show(i){
+    cur = Math.max(0, Math.min(slides.length - 1, i));
+    slides.forEach((s, j) => s.classList.toggle('active', j === cur));
+    document.querySelectorAll('.dot').forEach((d, j) => d.classList.toggle('on', j === cur));
+    document.getElementById('counter').textContent = (cur + 1) + ' / ' + slides.length;
+    document.getElementById('prev').disabled = cur === 0;
+    document.getElementById('next').textContent = cur === slides.length - 1 ? 'Start over ↺' : 'Next →';
+    if (cur === 2) animateBars();
+  }
+  function go(d){
+    if (cur === slides.length - 1 && d === 1) { show(0); return; }
+    show(cur + d);
+  }
+  document.addEventListener('keydown', e => {
+    if (e.key === 'ArrowRight') go(1);
+    if (e.key === 'ArrowLeft') go(-1);
+  });
+  show(0);
+
+  function animateBars(){
+    document.querySelectorAll('.bar i').forEach(b => {
+      b.style.width = '0%';
+      requestAnimationFrame(() => setTimeout(() => { b.style.width = b.dataset.w; }, 60));
+    });
+  }
+
+  /* ---- Slide 4: build the fly ---- */
+  const legState = { 1:false, 2:false, 3:false };
+  function addLeg(n){
+    legState[n] = !legState[n];
+    document.getElementById('leg' + n).classList.toggle('done', legState[n]);
+    const cost = (legState[1] ? 105 : 0) - (legState[2] ? 490 : 0) + (legState[3] ? 507 : 0);
+    const all = legState[1] && legState[2] && legState[3];
+    const v = document.getElementById('costval');
+    v.textContent = (cost < 0 ? '−$' + Math.abs(cost) : '$' + cost);
+    v.style.color = all ? 'var(--green)' : 'var(--ink)';
+    const note = document.getElementById('costnote');
+    if (all) {
+      note.innerHTML = '<strong>$105 + $507 paid, $490 collected = $122 total.</strong><br>That\'s your entire risk on the trade. The most you can ever lose is $122.';
+    } else if (legState[2] && !legState[1] && !legState[3]) {
+      note.textContent = 'Selling the body alone would collect money — but the wings are what cap your risk. Keep going.';
+    } else if (cost === 0) {
+      note.textContent = 'Add all three legs to see what this trade really costs.';
+    } else {
+      note.textContent = 'Keep going — the picture isn\'t complete yet.';
+    }
+    document.getElementById('wingL').style.opacity = legState[1] ? 1 : 0;
+    document.getElementById('wingR').style.opacity = legState[3] ? 1 : 0;
+    document.getElementById('bodyE').style.opacity = legState[2] ? 1 : 0;
+    document.getElementById('antennae').style.opacity = legState[2] ? 1 : 0;
+  }
+
+  /* ---- Slide 5: payoff tent ---- */
+  const settle = document.getElementById('settle');
+  const DEBIT = 1.22;
+  function tentUpdate(){
+    const s = +settle.value;
+    // butterfly value at expiration (4130/4140/4150 put fly)
+    const val = Math.max(4150 - s, 0) - 2 * Math.max(4140 - s, 0) + Math.max(4130 - s, 0);
+    const pl = Math.round((val - DEBIT) * 100);
+    document.getElementById('settleval').textContent = s.toLocaleString();
+    const plEl = document.getElementById('plval');
+    plEl.textContent = (pl >= 0 ? '+$' : '−$') + Math.abs(pl).toLocaleString();
+    plEl.style.color = pl >= 0 ? 'var(--green)' : 'var(--red)';
+    // marker position: 4115→40, 4165→700
+    const x = 40 + (s - 4115) / 50 * 660;
+    // y position: on payoff line. value 0 → y just at baseline area; scale: max value 10 → y 34, value 0 → y 166... 
+    const y = 166 - (val / 10) * 132;
+    document.getElementById('markerline').setAttribute('x1', x);
+    document.getElementById('markerline').setAttribute('x2', x);
+    document.getElementById('markerdot').setAttribute('cx', x);
+    document.getElementById('markerdot').setAttribute('cy', y);
+    const verdict = document.getElementById('verdict');
+    if (s === 4140) {
+      verdict.innerHTML = '<span class="good">🎯 Dead center — max payout. The $122 trade pays $878.</span>';
+    } else if (s > 4130 && s < 4150) {
+      verdict.innerHTML = '<span class="good">Inside the cash zone — the trade finishes with value.</span>';
+    } else {
+      verdict.innerHTML = '<span class="bad">Outside the zone — the trade expires worthless. Loss: the $122 you paid. Never more.</span>';
+    }
+  }
+  settle.addEventListener('input', tentUpdate);
+  tentUpdate();
+
+  /* ---- Slide 6: theta nights ---- */
+  let night = 0;
+  function stepNight(d){
+    night = Math.max(0, Math.min(5, night + d));
+    document.getElementById('nightn').textContent = night;
+    document.getElementById('nightminus').disabled = night === 0;
+    document.getElementById('nightplus').disabled = night === 5;
+    const fmt = n => (n >= 0 ? '+$' : '−$') + Math.abs(n).toFixed(2).replace(/\.00$/, '');
+    document.getElementById('drewv').textContent = fmt(-17 * night);
+    document.getElementById('sarahv').textContent = fmt(-3.5 * night);
+    document.getElementById('markv').textContent = fmt(1.6 * night);
+  }
+  stepNight(0);
+</script>
+</body>
+</html>
